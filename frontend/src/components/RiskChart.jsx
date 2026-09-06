@@ -1,0 +1,6 @@
+import React from "react";
+import {ResponsiveContainer,AreaChart,Area,XAxis,YAxis,Tooltip,CartesianGrid} from "recharts";
+import {trend} from "../data/mock";
+export default function RiskChart(){
+ return <ResponsiveContainer width="100%" height="100%"><AreaChart data={trend} margin={{top:10,right:8,left:-25,bottom:0}}><defs><linearGradient id="riskFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8ff0c0" stopOpacity=".25"/><stop offset="100%" stopColor="#8ff0c0" stopOpacity="0"/></linearGradient></defs><CartesianGrid stroke="rgba(255,255,255,.05)" vertical={false}/><XAxis dataKey="time" tick={{fill:"#64748b",fontSize:9}} axisLine={false} tickLine={false}/><YAxis tick={{fill:"#64748b",fontSize:9}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:"#0b1815",border:"1px solid rgba(143,240,192,.15)",borderRadius:12,color:"#fff",fontSize:11}}/><Area type="monotone" dataKey="risk" stroke="#8ff0c0" strokeWidth={2} fill="url(#riskFill)"/></AreaChart></ResponsiveContainer>
+}

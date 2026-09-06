@@ -1,0 +1,3 @@
+import React from "react";
+const styles={safe:"bg-emerald-300/10 text-emerald-200 border-emerald-300/15",watch:"bg-yellow-300/10 text-yellow-200 border-yellow-300/15",warning:"bg-orange-300/10 text-orange-200 border-orange-300/15",critical:"bg-red-400/10 text-red-300 border-red-400/15"};
+export default function RiskBadge({status}){return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${styles[status]}`}><span className="h-1.5 w-1.5 rounded-full bg-current"/>{status}</span>}
