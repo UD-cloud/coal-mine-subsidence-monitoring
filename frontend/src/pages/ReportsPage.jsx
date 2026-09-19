@@ -1,20 +1,29 @@
 import React, { useState } from "react";
 import {
   FileText, Download, CalendarDays, ShieldCheck, Eye, ShieldAlert,
-  Activity, FileDown, ChevronDown, ChevronUp
+  Activity, FileDown, ChevronDown, ChevronUp, WifiOff
 } from "lucide-react";
-import { nodes } from "../data/mock";
+import { getAllNodes } from "./nodeData";
 import RiskBadge from "../components/RiskBadge";
 
 export default function ReportsPage() {
-  const total = nodes.length;
-  const safe = nodes.filter(n => n.status === "safe").length;
-  const watch = nodes.filter(n => n.status === "watch").length;
-  const warning = nodes.filter(n => n.status === "warning").length;
-  const critical = nodes.filter(n => n.status === "critical").length;
-  const avgRisk = (nodes.reduce((sum, n) => sum + n.risk, 0) / total).toFixed(1);
-  const safePercent = ((safe / total) * 100).toFixed(0);
-  const highestRiskNode = [...nodes].sort((a, b) => b.risk - a.risk)[0];
+  const allNodes = getAllNodes();
+  const total = allNodes.length;
+  const offlineNodes = allNodes.filter((n) => n.offline);
+  const onlineNodes = allNodes.filter((n) => !n.offline);
+
+  const safe = onlineNodes.filter((n) => n.edge_ai.status === "SAFE").length;
+  const warning = onlineNodes.filter((n) => n.edge_ai.status === "WARNING").length;
+  const critical = onlineNodes.filter((n) => n.edge_ai.status === "CRITICAL").length;
+  const offline = offlineNodes.length;
+
+  const avgRisk = onlineNodes.length
+    ? (onlineNodes.reduce((sum, n) => sum + n.edge_ai.anomaly_risk_score, 0) / onlineNodes.length).toFixed(1)
+    : "0.0";
+  const safePercent = onlineNodes.length ? ((safe / onlineNodes.length) * 100).toFixed(0) : "0";
+  const highestRiskNode = onlineNodes.length
+    ? [...onlineNodes].sort((a, b) => b.edge_ai.anomaly_risk_score - a.edge_ai.anomaly_risk_score)[0]
+    : null;
   const trendWord = avgRisk >= 50 ? "elevated" : avgRisk >= 25 ? "moderate" : "low";
 
   const [range, setRange] = useState("today");
@@ -22,19 +31,29 @@ export default function ReportsPage() {
   const [openReport, setOpenReport] = useState(null);
 
   const bands = [
-    { key: "low", label: "Low (0-25%)", color: "bg-emerald-300", nodes: nodes.filter(n => n.risk < 25) },
-    { key: "mid", label: "Medium (25-50%)", color: "bg-amber-300", nodes: nodes.filter(n => n.risk >= 25 && n.risk < 50) },
-    { key: "high", label: "High (50-75%)", color: "bg-orange-300", nodes: nodes.filter(n => n.risk >= 50 && n.risk < 75) },
-    { key: "critical", label: "Critical (75-100%)", color: "bg-rose-400", nodes: nodes.filter(n => n.risk >= 75) },
+    { key: "low", label: "Low (0-25%)", color: "bg-emerald-300", nodes: onlineNodes.filter((n) => n.edge_ai.anomaly_risk_score < 25) },
+    { key: "mid", label: "Medium (25-50%)", color: "bg-amber-300", nodes: onlineNodes.filter((n) => n.edge_ai.anomaly_risk_score >= 25 && n.edge_ai.anomaly_risk_score < 50) },
+    { key: "high", label: "High (50-75%)", color: "bg-orange-300", nodes: onlineNodes.filter((n) => n.edge_ai.anomaly_risk_score >= 50 && n.edge_ai.anomaly_risk_score < 75) },
+    { key: "critical", label: "Critical (75-100%)", color: "bg-rose-400", nodes: onlineNodes.filter((n) => n.edge_ai.anomaly_risk_score >= 75) },
   ];
-  const activeBandData = bands.find(b => b.key === activeBand);
+  const activeBandData = bands.find((b) => b.key === activeBand);
 
   const summary = [
     ["Total Nodes", total, Activity],
     ["Safe", safe, ShieldCheck],
-    ["Watch", watch, Eye],
     ["Warning + Critical", warning + critical, ShieldAlert],
+    ["Offline", offline, WifiOff],
   ];
+
+  const avgTilt = onlineNodes.length
+    ? (onlineNodes.reduce((s, n) => s + Number(n.sensors.mpu6050_tilt.pitch_deg), 0) / onlineNodes.length).toFixed(2)
+    : "0.00";
+  const avgDisplacement = onlineNodes.length
+    ? (onlineNodes.reduce((s, n) => s + n.sensors.dwm1000_uwb.relative_displacement_mm, 0) / onlineNodes.length).toFixed(2)
+    : "0.00";
+  const avgSettlement = onlineNodes.length
+    ? (onlineNodes.reduce((s, n) => s + Number(n.sensors.bmp280.settlement_drop_m), 0) / onlineNodes.length).toFixed(3)
+    : "0.000";
 
   const reportLog = [
     {
@@ -45,38 +64,36 @@ export default function ReportsPage() {
         <p className="text-xs leading-relaxed text-slate-400">
           {safePercent}% of monitored nodes are currently reporting SAFE status.
           Average AI risk across the network is {avgRisk}%, considered{" "}
-          <span className="font-bold text-slate-200">{trendWord}</span>. Node{" "}
-          <span className="font-bold text-slate-200">{highestRiskNode.id}</span> shows the
-          highest individual risk score at {highestRiskNode.risk}%.
+          <span className="font-bold text-slate-200">{trendWord}</span>.
+          {highestRiskNode && (
+            <> Node <span className="font-bold text-slate-200">{highestRiskNode.node_id}</span> ({highestRiskNode.mine_name}) shows the highest individual risk score at {highestRiskNode.edge_ai.anomaly_risk_score}%.</>
+          )}
           {critical > 0 && (
             <> {critical} node{critical > 1 ? "s are" : " is"} currently critical and require immediate attention.</>
+          )}
+          {offline > 0 && (
+            <> {offline} node{offline > 1 ? "s are" : " is"} currently offline with no readings.</>
           )}
         </p>
       ),
     },
     {
-      name: "Panel P-12 deformation analysis",
+      name: "Ground deformation analysis",
       date: "30 Aug 2026",
       type: "PDF",
       content: (
         <div className="grid grid-cols-3 gap-3 text-center text-xs">
           <div>
             <div className="text-[10px] text-slate-500">Avg Tilt</div>
-            <div className="text-sm font-bold text-white">
-              {(nodes.reduce((s, n) => s + n.tilt, 0) / total).toFixed(2)}°
-            </div>
+            <div className="text-sm font-bold text-white">{avgTilt}°</div>
           </div>
           <div>
             <div className="text-[10px] text-slate-500">Avg Displacement</div>
-            <div className="text-sm font-bold text-white">
-              {(nodes.reduce((s, n) => s + n.displacement, 0) / total).toFixed(2)} mm
-            </div>
+            <div className="text-sm font-bold text-white">{avgDisplacement} mm</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-500">Avg Crack Width</div>
-            <div className="text-sm font-bold text-white">
-              {(nodes.reduce((s, n) => s + n.crack, 0) / total).toFixed(2)} mm
-            </div>
+            <div className="text-[10px] text-slate-500">Avg Settlement Drop</div>
+            <div className="text-sm font-bold text-white">{avgSettlement} m</div>
           </div>
         </div>
       ),
@@ -88,16 +105,16 @@ export default function ReportsPage() {
       content: (
         <div className="grid grid-cols-3 gap-3 text-center text-xs">
           <div>
-            <div className="text-[10px] text-slate-500">Packet delivery</div>
-            <div className="text-sm font-bold text-white">98.9%</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-slate-500">Avg battery</div>
-            <div className="text-sm font-bold text-white">86%</div>
-          </div>
-          <div>
             <div className="text-[10px] text-slate-500">Nodes online</div>
-            <div className="text-sm font-bold text-white">{total}/{total}</div>
+            <div className="text-sm font-bold text-white">{onlineNodes.length}/{total}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500">Nodes offline</div>
+            <div className="text-sm font-bold text-white">{offline}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-500">Uptime</div>
+            <div className="text-sm font-bold text-white">{((onlineNodes.length / total) * 100).toFixed(1)}%</div>
           </div>
         </div>
       ),
@@ -108,8 +125,8 @@ export default function ReportsPage() {
       type: "PDF",
       content: (
         <p className="text-xs leading-relaxed text-slate-400">
-          Network-wide average risk stands at {avgRisk}%. {watch} node
-          {watch !== 1 ? "s are" : " is"} in watch state and {warning} in warning state,
+          Network-wide average risk stands at {avgRisk}%. {warning} node
+          {warning !== 1 ? "s are" : " is"} in warning state and {critical} in critical state,
           suggesting continued monitoring is required across affected zones this week.
         </p>
       ),
@@ -120,9 +137,7 @@ export default function ReportsPage() {
     <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="text-2xl font-black text-white">Data & Reports</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Historical summaries and export-ready operational reports.
-        </p>
+        <p className="mt-1 text-sm text-slate-500">Historical summaries and export-ready operational reports.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -138,13 +153,13 @@ export default function ReportsPage() {
       <div className="glass mt-6 rounded-2xl p-5">
         <div className="mb-1 flex items-center justify-between">
           <div className="text-sm font-bold text-slate-200">Risk Distribution</div>
-          <div className="text-[10px] text-slate-500">{total} nodes total</div>
+          <div className="text-[10px] text-slate-500">{onlineNodes.length} online nodes</div>
         </div>
         <p className="mb-4 text-[10px] text-slate-600">Click a band to see its nodes</p>
 
         <div className="flex h-8 w-full overflow-hidden rounded-lg">
-          {bands.map(b => {
-            const pct = ((b.nodes.length / total) * 100).toFixed(0);
+          {bands.map((b) => {
+            const pct = onlineNodes.length ? ((b.nodes.length / onlineNodes.length) * 100).toFixed(0) : 0;
             return (
               <button
                 key={b.key}
@@ -153,18 +168,16 @@ export default function ReportsPage() {
                 style={{ width: `${pct}%` }}
                 title={`${b.label}: ${b.nodes.length} nodes`}
               >
-                {pct >= 12 && (
-                  <span className="text-[10px] font-black text-slate-950">{pct}%</span>
-                )}
+                {pct >= 12 && <span className="text-[10px] font-black text-slate-950">{pct}%</span>}
               </button>
             );
           })}
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {bands.map(b => {
+          {bands.map((b) => {
             const bandAvgRisk = b.nodes.length
-              ? (b.nodes.reduce((s, n) => s + n.risk, 0) / b.nodes.length).toFixed(0)
+              ? (b.nodes.reduce((s, n) => s + n.edge_ai.anomaly_risk_score, 0) / b.nodes.length).toFixed(0)
               : "–";
             const isActive = activeBand === b.key;
             return (
@@ -193,12 +206,12 @@ export default function ReportsPage() {
             {activeBandData.nodes.length === 0 ? (
               <div className="px-2 py-1 text-[10px] text-slate-600">No nodes in this range</div>
             ) : (
-              activeBandData.nodes.map(n => (
-                <div key={n.id} className="flex items-center justify-between px-2 py-1.5 text-xs">
-                  <span className="font-bold text-slate-200">{n.id}</span>
+              activeBandData.nodes.map((n) => (
+                <div key={n.node_id} className="flex items-center justify-between px-2 py-1.5 text-xs">
+                  <span className="font-bold text-slate-200">{n.node_id}</span>
                   <span className="flex items-center gap-2">
-                    <span className="text-slate-400">{n.risk}%</span>
-                    <RiskBadge status={n.status} />
+                    <span className="text-slate-400">{n.edge_ai.anomaly_risk_score}%</span>
+                    <RiskBadge status={n.edge_ai.status.toLowerCase()} />
                   </span>
                 </div>
               ))
@@ -212,7 +225,7 @@ export default function ReportsPage() {
           <FileDown className="h-4 w-4 text-emerald-200" /> Export Center
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {["today", "7d", "30d"].map(r => (
+          {["today", "7d", "30d"].map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
@@ -241,10 +254,8 @@ export default function ReportsPage() {
       </div>
 
       <div className="glass mt-6 overflow-hidden rounded-2xl">
-        <div className="border-b border-white/5 px-5 py-4 text-sm font-bold text-slate-200">
-          Report Log
-        </div>
-        {reportLog.map(r => (
+        <div className="border-b border-white/5 px-5 py-4 text-sm font-bold text-slate-200">Report Log</div>
+        {reportLog.map((r) => (
           <div key={r.name} className="border-b border-white/5 last:border-0">
             <button
               onClick={() => setOpenReport(openReport === r.name ? null : r.name)}
@@ -265,15 +276,13 @@ export default function ReportsPage() {
                 <ChevronDown className="h-4 w-4 text-slate-500" />
               )}
               <span
-                onClick={e => { e.stopPropagation(); alert(`Downloading: ${r.name}`); }}
+                onClick={(e) => { e.stopPropagation(); alert(`Downloading: ${r.name}`); }}
                 className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-emerald-200"
               >
                 <Download className="h-4 w-4" />
               </span>
             </button>
-            {openReport === r.name && (
-              <div className="px-5 pb-5 pl-[4.25rem]">{r.content}</div>
-            )}
+            {openReport === r.name && <div className="px-5 pb-5 pl-[4.25rem]">{r.content}</div>}
           </div>
         ))}
       </div>

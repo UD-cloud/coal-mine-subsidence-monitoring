@@ -1,4 +1,4 @@
-# BhoomiGuard AI — SIH Frontend
+# Coreswar AI — SIH Frontend
 
 A polished React + Tailwind CSS prototype for an AI-enabled real-time mine subsidence monitoring and early-warning platform.
 
