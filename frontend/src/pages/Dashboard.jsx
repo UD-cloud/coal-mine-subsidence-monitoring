@@ -262,41 +262,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Offline Nodes panel */}
-          <div className="rounded-xl border border-red-500/20 bg-gradient-to-br from-red-500/10 via-slate-800 to-slate-800 p-3.5 space-y-2">
-            <div className="flex items-center justify-between px-0.5">
-              <h2 className="flex items-center gap-1.5 text-sm font-bold text-red-300">
-                <WifiOff className="h-4 w-4" /> Offline Nodes
-              </h2>
-              <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300">
-                {offlineNodes.length}
-              </span>
-            </div>
-
-            {offlineNodes.length === 0 ? (
-              <p className="px-0.5 py-2 text-[11px] text-slate-500">All nodes reporting normally.</p>
-            ) : (
-              <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
-                {offlineNodes.map((n) => (
-                  <button
-                    key={n.node_id}
-                    onClick={() => jumpToNode(n)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/5 bg-slate-900/50 px-2.5 py-2 text-left transition-colors hover:border-red-400/40 hover:bg-slate-900"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-semibold text-slate-200">{n.node_id}</div>
-                      <div className="truncate text-[10px] text-slate-500">{n.mine_name}</div>
-                    </div>
-                    <div className="flex-none text-right">
-                      <div className="text-[10px] font-semibold text-red-300">No signal</div>
-                      <div className="text-[9px] text-slate-500">{n.last_seen_hrs_ago}h ago</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Notice box — click importance */}
           <div
             role="button"

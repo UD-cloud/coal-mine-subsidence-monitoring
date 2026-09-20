@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import Logo from "./Logo";
-import { getOfflineNodes } from "../pages/nodeData";
+import { getOfflineNodes, getAllNodes } from "../pages/nodeData";
 
 const items = [
   ["Dashboard", "/", LayoutDashboard],
@@ -27,6 +27,12 @@ const items = [
 
 export default function Sidebar() {
   const offlineCount = useMemo(() => getOfflineNodes().length, []);
+  const alertCount = useMemo(() => {
+    const nodes = getAllNodes();
+    return nodes.filter(
+      (n) => !n.offline && (n.edge_ai.status === "CRITICAL" || n.edge_ai.status === "WARNING")
+    ).length;
+  }, []);
 
   return (
     <aside
@@ -69,9 +75,9 @@ export default function Sidebar() {
             </span>
 
             {/* Alerts count */}
-            {label === "Alerts" && (
+            {label === "Alerts" && alertCount > 0 && (
               <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-red-400/15 px-1 text-[10px] text-red-300">
-                3
+                {alertCount}
               </span>
             )}
 
