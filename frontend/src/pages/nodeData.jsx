@@ -9,37 +9,62 @@ function mulberry32(a) {
   };
 }
 
-// Har node ka apna "baseline tendency" — kaun sa node zyada safe-leaning hai,
-// kaun warning ya critical ki taraf — ye SLOWLY badalta hai (har ~30 sec),
-// taaki demo mein natural drift dikhe lekin flicker na ho.
-function getNodeBaseline(mine, nodeIndex, tick) {
-  const slowBucket = Math.floor(tick / 15); // ~30 sec par ek baar hi badlega
-  const rand = mulberry32(mine.seed * 101 + nodeIndex * 47 + slowBucket * 977);
-  // 0 = pure safe leaning, 1 = pure critical leaning
-  return rand();
+// String se stable numeric hash — mine.seed pe depend nahi karta,
+// isliye har mine (mine.id ke through) guaranteed unique aur alag hoga,
+// chahe MapPage.jsx mein seed field kuch bhi ho / duplicate ho.
+function hashStr(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
-// Fixed offline node per mine — tick pe depend NAHI karta, isliye
-// ek baar "kharab" node set hone ke baad tab tak offline rahega
-// jab tak forced demo mode active na ho.
+function mineHash(mine) {
+  return hashStr(String(mine.id));
+}
+
+function getNodeBaseline(mine, nodeIndex, tick) {
+  const slowBucket = Math.floor(tick / 15);
+  const seed = mineHash(mine) * 101 + nodeIndex * 977 + slowBucket * 7919;
+  const rand = mulberry32(seed);
+  const raw = rand();
+
+  const bands = {
+    safe:     [0.00, 0.40],
+    warning:  [0.28, 0.72],
+    critical: [0.55, 0.95],
+  };
+  const [lo, hi] = bands[mine.status] || [0, 1];
+
+  return lo + raw * (hi - lo);
+}
+
 function getOfflineIndex(mine) {
-  const rand = mulberry32(mine.seed * 991 + 13);
+  const rand = mulberry32(mineHash(mine) * 991 + 13);
   return Math.floor(rand() * 6);
 }
 
 export function generateMineNodes(mine, telemetry) {
   const tick = telemetry?.tick || 0;
   const forcedMode = telemetry?.sim_mode; // "NORMAL" | "WARNING" | "CRITICAL" | "DYNAMIC" | undefined
+  // Only an EXPLICIT demo override (NORMAL/WARNING/CRITICAL button) should
+  // force every node online. "DYNAMIC" (AUTO / natural mode) and no mode at
+  // all (undefined, before the WS connects) must both still allow the fixed
+  // offline node to show — DYNAMIC is not the same as "no override".
+  const isExplicitOverride =
+    forcedMode === "NORMAL" || forcedMode === "WARNING" || forcedMode === "CRITICAL";
   const offlineIndex = getOfflineIndex(mine);
+  const mh = mineHash(mine);
 
   return Array.from({ length: 6 }).map((_, i) => {
     const node_id = `${mine.id}-NODE-${String(i + 1).padStart(2, "0")}`;
     const location = `${mine.name} — Panel ${i + 1}`;
 
-    // Offline node — sirf tab jab koi demo mode force na ho
-    if (i === offlineIndex && !forcedMode) {
-      // last_seen bhi thoda "grow" karega — jitna zyada waqt guzra utna zyada ghante
-      const rand = mulberry32(mine.seed * 991 + 13 + i);
+    // Offline node — sirf tab jab koi EXPLICIT demo mode force na ho
+    if (i === offlineIndex && !isExplicitOverride) {
+      const rand = mulberry32(mh * 991 + 13 + i);
       return {
         node_id,
         location,
@@ -53,31 +78,28 @@ export function generateMineNodes(mine, telemetry) {
           predicted_subsidence_time_hrs: null,
         },
         sensors: null,
-        last_seen_hrs_ago: Math.round(1 + rand() * 5 + tick / 30),
+        // tick-independent — fixed once per mine/node, kabhi nahi badlega
+        last_seen_hrs_ago: Math.round(1 + rand() * 5),
       };
     }
 
-    // ---- Baseline tendency (slow) + live jitter (fast, har tick) ----
-    const valueRand = mulberry32(mine.seed * 31 + i * 113 + 11 + tick * 53);
+    // ---- Baseline tendency (slow, unique per mine+node) + live jitter (fast, har tick) ----
+    const valueRand = mulberry32(mh * 31 + i * 113 + 11 + tick * 53);
 
     let baseline;
     if (forcedMode === "CRITICAL") baseline = 0.85;
     else if (forcedMode === "WARNING") baseline = 0.5;
     else if (forcedMode === "NORMAL") baseline = 0.1;
-    else baseline = getNodeBaseline(mine, i, tick); // natural drift
+    else baseline = getNodeBaseline(mine, i, tick); // natural per-mine, per-node drift
 
-    // Baseline ke aas-paas chhota jitter — taaki har tick alag reading aaye
-    // lekin status abrupt na palte
     const jitter = (valueRand() - 0.5) * 0.25;
-    const score = Math.min(1, Math.max(0, baseline + jitter)); // 0..1 combined risk
+    const score = Math.min(1, Math.max(0, baseline + jitter));
 
-    // ---- Status ab SCORE se derive ho raha hai (values -> status) ----
     let status;
     if (score > 0.68) status = "CRITICAL";
     else if (score > 0.35) status = "WARNING";
     else status = "SAFE";
 
-    // ---- Sensor readings bhi usi score se scale hoti hain — consistent rehta hai ----
     const pitch = (score * 12 * valueRand() + score * 3).toFixed(2);
     const roll = (score * 10 * valueRand() + score * 2.5).toFixed(2);
     const vibration = (0.05 + score * 8 * valueRand()).toFixed(3);

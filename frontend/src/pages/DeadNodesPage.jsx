@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { WifiOff, AlertTriangle, MapPin, Clock } from "lucide-react";
+import { connectLiveTelemetry } from "../api";
 import { getOfflineNodes } from "./nodeData";
 
 function formatOfflineSince(hrsAgo) {
@@ -10,7 +11,24 @@ function formatOfflineSince(hrsAgo) {
 }
 
 export default function DeadNodesPage() {
-  const offlineNodes = useMemo(() => getOfflineNodes(), []);
+  const [telemetry, setTelemetry] = useState(null);
+
+  // Subscribe to the same live WebSocket the Dashboard uses, so this page
+  // stays in sync with the AUTO/NORMAL/WARNING/CRITICAL demo mode buttons —
+  // e.g. when a judge forces WARNING/CRITICAL, all nodes go online and this
+  // list should empty out, matching what the Dashboard shows.
+  useEffect(() => {
+    const socket = connectLiveTelemetry(
+      (data) => setTelemetry(data),
+      () => {}
+    );
+    return () => socket.close();
+  }, []);
+
+  const offlineNodes = useMemo(
+    () => getOfflineNodes({ sim_mode: telemetry?.sim_mode }),
+    [telemetry?.sim_mode]
+  );
 
   return (
     <div className="p-6 bg-slate-900 min-h-screen text-white space-y-6">

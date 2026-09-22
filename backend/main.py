@@ -35,7 +35,10 @@ NODES = [
 
 # Global state to keep track of continuous simulation & sensor velocity history
 simulation_state = {
-    "subsidence_severity": "NORMAL",  # NORMAL, WARNING, CRITICAL, DYNAMIC
+    # Default is DYNAMIC (not NORMAL) so the demo shows a natural mix of
+    # SAFE / WARNING / CRITICAL nodes out of the box, instead of everything
+    # reading safe until a judge explicitly presses a mode button.
+    "subsidence_severity": "DYNAMIC",  # NORMAL, WARNING, CRITICAL, DYNAMIC
     "ticks": 0,
     "last_telemetry": {}  # Stores previous readings for Rate-of-Change (Velocity AI)
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { connectLiveTelemetry, triggerDemoMode } from '../api';
+import { connectLiveTelemetry } from '../api';
 import MapPanel, { mines } from './MapPage';
 import { generateMineNodes, getOfflineNodes } from './nodeData';
 import { Menu, X, AlertTriangle, AlertCircle, CheckCircle2, WifiOff } from 'lucide-react';
@@ -95,13 +95,6 @@ export default function Dashboard() {
           }`}>
             {isConnected ? '● LIVE MESH STREAM' : '○ DISCONNECTED'}
           </span>
-
-          {/* Demo Mode Triggers for Judges */}
-          <div className="flex gap-2">
-            <button onClick={() => triggerDemoMode('NORMAL')} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs">NORMAL</button>
-            <button onClick={() => triggerDemoMode('WARNING')} className="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-xs">WARNING</button>
-            <button onClick={() => triggerDemoMode('CRITICAL')} className="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-xs">CRITICAL</button>
-          </div>
         </div>
       </div>
 
