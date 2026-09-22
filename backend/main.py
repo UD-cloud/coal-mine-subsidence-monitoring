@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import uvicorn
 
 app = FastAPI(
-    title="Jala Vedha - Smart Mine Subsidence Monitoring Backend & Hardware Simulator",
+    title="COSEWARS- Smart Mine Subsidence Monitoring Backend & Hardware Simulator",
     description="Simulates low-cost IoT sensor mesh nodes (ESP32/LoRa) and Edge Pi Gateway with AI Anomaly Detection.",
     version="2.0.0"
 )
@@ -183,7 +183,7 @@ manager = ConnectionManager()
 @app.get("/")
 def read_root():
     return {
-        "project": "Jala Vedha - SIH Smart Mine Subsidence Monitoring Platform",
+        "project": "COSEWARS - SIH Smart Mine Subsidence Monitoring Platform",
         "system": "Raspberry Pi Edge AI & IoT Mesh Simulator",
         "status": "Online",
         "active_nodes": len(NODES),
