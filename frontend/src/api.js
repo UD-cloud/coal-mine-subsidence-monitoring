@@ -1,12 +1,16 @@
-const BACKEND_URL = "http://localhost:8000";
-const WS_URL = "ws://localhost:8000/ws/live-stream";
+const BACKEND_URL = "https://coal-mine-subsidence-monitoring.onrender.com";
+const WS_URL = "wss://coal-mine-subsidence-monitoring.onrender.com/ws/live-stream";
 
 // REST Call: Trigger backend demo modes (NORMAL, WARNING, CRITICAL, DYNAMIC)
 export const triggerDemoMode = async (mode) => {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/trigger-simulation?mode=${mode}`, {
-      method: 'POST'
-    });
+    const res = await fetch(
+      `${BACKEND_URL}/api/trigger-simulation?mode=${mode}`,
+      {
+        method: "POST",
+      }
+    );
+
     return await res.json();
   } catch (err) {
     console.error("Failed to trigger simulation mode:", err);
