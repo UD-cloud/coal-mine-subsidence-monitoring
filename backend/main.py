@@ -227,10 +227,12 @@ async def websocket_endpoint(websocket: WebSocket):
             critical_count = sum(1 for n in nodes_data if n["edge_ai"]["status"] == "CRITICAL")
             
             telemetry_payload = {
-                "timestamp": time.strftime("%X"),
-                "cluster_alert": "EVACUATION REQUIRED" if critical_count >= 2 else "STABLE MESH",
-                "nodes": nodes_data
-            }
+    "timestamp": time.strftime("%X"),
+    "tick": simulation_state["ticks"],
+    "sim_mode": simulation_state["subsidence_severity"],   # NEW
+    "cluster_alert": "EVACUATION REQUIRED" if critical_count >= 2 else "STABLE MESH",
+    "nodes": nodes_data
+}
             await manager.send_personal_message(telemetry_payload, websocket)
             await asyncio.sleep(2.0)
     except WebSocketDisconnect:

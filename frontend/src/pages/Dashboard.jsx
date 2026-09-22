@@ -17,6 +17,17 @@ export default function Dashboard() {
   const [highlightNodeId, setHighlightNodeId] = useState(null);
   const menuRef = useRef(null);
 
+  // Local ticking clock — drives sensor value changes every 2s,
+  // independent of whether the WebSocket telemetry is flowing or not.
+  const [localTick, setLocalTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLocalTick((t) => t + 1);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     // Live Backend WebSocket Connection
     const socket = connectLiveTelemetry(
@@ -49,8 +60,16 @@ export default function Dashboard() {
   }, [highlightNodeId]);
 
   const selectedMine = mines.find((m) => m.id === selectedMineId) || mines[0];
-  const mineNodes = useMemo(() => generateMineNodes(selectedMine), [selectedMine]);
-  const offlineNodes = useMemo(() => getOfflineNodes(), []);
+
+  const mineNodes = useMemo(
+    () => generateMineNodes(selectedMine, { tick: localTick, sim_mode: telemetry?.sim_mode }),
+    [selectedMine, localTick, telemetry?.sim_mode]
+  );
+
+  const offlineNodes = useMemo(
+    () => getOfflineNodes({ tick: localTick, sim_mode: telemetry?.sim_mode }),
+    [localTick, telemetry?.sim_mode]
+  );
 
   const jumpToNode = (node) => {
     setSelectedMineId(node.mine_id);

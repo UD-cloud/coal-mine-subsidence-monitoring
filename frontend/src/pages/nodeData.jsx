@@ -9,22 +9,37 @@ function mulberry32(a) {
   };
 }
 
+// Har node ka apna "baseline tendency" — kaun sa node zyada safe-leaning hai,
+// kaun warning ya critical ki taraf — ye SLOWLY badalta hai (har ~30 sec),
+// taaki demo mein natural drift dikhe lekin flicker na ho.
+function getNodeBaseline(mine, nodeIndex, tick) {
+  const slowBucket = Math.floor(tick / 15); // ~30 sec par ek baar hi badlega
+  const rand = mulberry32(mine.seed * 101 + nodeIndex * 47 + slowBucket * 977);
+  // 0 = pure safe leaning, 1 = pure critical leaning
+  return rand();
+}
 
-export function generateMineNodes(mine) {
-  const rand = mulberry32(mine.seed * 13 + 7);
-  const statuses = ["safe", "safe", "warning", "warning", "critical", "critical"];
-  for (let i = statuses.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [statuses[i], statuses[j]] = [statuses[j], statuses[i]];
-  }
+// Fixed offline node per mine — tick pe depend NAHI karta, isliye
+// ek baar "kharab" node set hone ke baad tab tak offline rahega
+// jab tak forced demo mode active na ho.
+function getOfflineIndex(mine) {
+  const rand = mulberry32(mine.seed * 991 + 13);
+  return Math.floor(rand() * 6);
+}
 
-  const offlineIndex = Math.floor(rand() * statuses.length);
+export function generateMineNodes(mine, telemetry) {
+  const tick = telemetry?.tick || 0;
+  const forcedMode = telemetry?.sim_mode; // "NORMAL" | "WARNING" | "CRITICAL" | "DYNAMIC" | undefined
+  const offlineIndex = getOfflineIndex(mine);
 
-  return statuses.map((status, i) => {
+  return Array.from({ length: 6 }).map((_, i) => {
     const node_id = `${mine.id}-NODE-${String(i + 1).padStart(2, "0")}`;
     const location = `${mine.name} — Panel ${i + 1}`;
 
-    if (i === offlineIndex) {
+    // Offline node — sirf tab jab koi demo mode force na ho
+    if (i === offlineIndex && !forcedMode) {
+      // last_seen bhi thoda "grow" karega — jitna zyada waqt guzra utna zyada ghante
+      const rand = mulberry32(mine.seed * 991 + 13 + i);
       return {
         node_id,
         location,
@@ -38,13 +53,40 @@ export function generateMineNodes(mine) {
           predicted_subsidence_time_hrs: null,
         },
         sensors: null,
-        last_seen_hrs_ago: Math.round(1 + rand() * 11),
+        last_seen_hrs_ago: Math.round(1 + rand() * 5 + tick / 30),
       };
     }
 
-    const riskBase = status === "critical" ? 80 : status === "warning" ? 50 : 15;
-    const risk = Math.round(riskBase + rand() * 15);
-    const confidence = Math.round(80 + rand() * 18);
+    // ---- Baseline tendency (slow) + live jitter (fast, har tick) ----
+    const valueRand = mulberry32(mine.seed * 31 + i * 113 + 11 + tick * 53);
+
+    let baseline;
+    if (forcedMode === "CRITICAL") baseline = 0.85;
+    else if (forcedMode === "WARNING") baseline = 0.5;
+    else if (forcedMode === "NORMAL") baseline = 0.1;
+    else baseline = getNodeBaseline(mine, i, tick); // natural drift
+
+    // Baseline ke aas-paas chhota jitter — taaki har tick alag reading aaye
+    // lekin status abrupt na palte
+    const jitter = (valueRand() - 0.5) * 0.25;
+    const score = Math.min(1, Math.max(0, baseline + jitter)); // 0..1 combined risk
+
+    // ---- Status ab SCORE se derive ho raha hai (values -> status) ----
+    let status;
+    if (score > 0.68) status = "CRITICAL";
+    else if (score > 0.35) status = "WARNING";
+    else status = "SAFE";
+
+    // ---- Sensor readings bhi usi score se scale hoti hain — consistent rehta hai ----
+    const pitch = (score * 12 * valueRand() + score * 3).toFixed(2);
+    const roll = (score * 10 * valueRand() + score * 2.5).toFixed(2);
+    const vibration = (0.05 + score * 8 * valueRand()).toFixed(3);
+    const displacement = Math.round(score * 30 * (0.4 + valueRand() * 0.6));
+    const settlement = (score * 0.35 * (0.4 + valueRand() * 0.6)).toFixed(3);
+
+    const risk = Math.round(score * 100);
+    const confidence = Math.round(80 + valueRand() * 18);
+    const ttf = status === "CRITICAL" ? Math.round(1 + (1 - score) * 15) : null;
 
     return {
       node_id,
@@ -53,34 +95,25 @@ export function generateMineNodes(mine) {
       mine_name: mine.name,
       offline: false,
       edge_ai: {
-        status: status.toUpperCase(),
+        status,
         anomaly_risk_score: risk,
         ai_confidence_pct: confidence,
-        predicted_subsidence_time_hrs: status === "critical" ? Math.round(4 + rand() * 20) : null,
+        predicted_subsidence_time_hrs: ttf,
       },
       sensors: {
-        mpu6050_tilt: {
-          pitch_deg: (status === "safe" ? rand() * 1.5 : status === "warning" ? 2 + rand() * 3 : 5 + rand() * 6).toFixed(2),
-          roll_deg: (status === "safe" ? rand() * 1.5 : status === "warning" ? 2 + rand() * 3 : 5 + rand() * 6).toFixed(2),
-        },
-        sw420_vibration: {
-          seismic_vib_g: (status === "safe" ? 0.01 + rand() * 0.02 : status === "warning" ? 0.05 + rand() * 0.05 : 0.15 + rand() * 0.15).toFixed(3),
-        },
-        dwm1000_uwb: {
-          relative_displacement_mm: Math.round(status === "safe" ? rand() * 3 : status === "warning" ? 5 + rand() * 10 : 20 + rand() * 30),
-        },
-        bmp280: {
-          settlement_drop_m: (status === "safe" ? rand() * 0.02 : status === "warning" ? 0.05 + rand() * 0.1 : 0.2 + rand() * 0.3).toFixed(3),
-        },
+        mpu6050_tilt: { pitch_deg: pitch, roll_deg: roll },
+        sw420_vibration: { seismic_vib_g: vibration },
+        dwm1000_uwb: { relative_displacement_mm: displacement },
+        bmp280: { settlement_drop_m: settlement },
       },
     };
   });
 }
 
-export function getAllNodes() {
-  return mines.flatMap((mine) => generateMineNodes(mine));
+export function getAllNodes(telemetry) {
+  return mines.flatMap((mine) => generateMineNodes(mine, telemetry));
 }
 
-export function getOfflineNodes() {
-  return getAllNodes().filter((n) => n.offline);
+export function getOfflineNodes(telemetry) {
+  return getAllNodes(telemetry).filter((n) => n.offline);
 }
